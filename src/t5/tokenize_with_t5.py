@@ -11,17 +11,17 @@ Description:
     Special tokens are preserved with an empty word_id.
 
 Inputs:
-    --sentences_csv : data/cleaned/merged_datasets.csv
-    --spacy_csv : outputs/spacy/spacy_features.csv
+    --sentences_csv : data/cleaned/snli_filtered.csv
+    --spacy_csv : outputs/spacy/spacy_snli_features.csv
     --output : output CSV path depending on the dataset
 
 Outputs:
     Example: outputs/t5/t5_snli_tokens.csv
 
 Usage:
-    python -m src.t5.tokenize_with_t5 \
-    --sentences_csv data/cleaned/merged_datasets.csv \
-    --spacy_csv outputs/spacy/spacy_features.csv \
+    !python -m src.t5.tokenize_with_t5 \
+    --sentences_csv data/cleaned/snli_filtered.csv \
+    --spacy_csv outputs/spacy/spacy_snli_features.csv \
     --output outputs/t5/t5_snli_tokens.csv
 """
 
