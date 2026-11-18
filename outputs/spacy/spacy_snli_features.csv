@@ -69574,14 +69574,15 @@ sentence_id;word_index;word;is_numeric;is_punctuation;is_stopword;is_pronoun;pos
 5594;1;lady;0;0;0;0;NOUN;1;nsubj;1;NONE;0;2;2;snli
 5594;2;wearing;0;0;0;0;VERB;3;acl;19;NONE;0;3;1;snli
 5594;3;glasses;0;0;0;0;NOUN;1;dobj;10;NONE;0;4;0;snli
-5594;4;has;0;0;1;0;VERB;3;ROOT;4;NONE;0;1;2;snli
+5594;4;has;0;0;1;0;VERB;3;ROOT;4;NONE;0;1;3;snli
 5594;5;her;0;0;1;1;PRON;6;poss;9;NONE;0;4;0;snli
 5594;6;camera;0;0;0;0;NOUN;1;nsubj;1;NONE;0;3;1;snli
 5594;7;stored;0;0;0;0;VERB;3;ccomp;27;NONE;0;2;3;snli
 5594;8;away;0;0;0;0;ADV;7;advmod;20;NONE;0;3;0;snli
 5594;9;in;0;0;1;0;ADP;2;prep;2;NONE;0;3;1;snli
 5594;10;her;0;0;1;1;PRON;6;poss;9;NONE;0;5;0;snli
-5594;11;bag.\;0;0;0;0;NOUN;1;pobj;3;NONE;0;4;1;snli
+5594;11;bag;0;0;0;0;NOUN;1;pobj;3;NONE;0;4;1;snli
+5594;12;.;0;1;0;0;PUNCT;4;punct;7;NONE;0;2;0;snli
 5595;0;The;0;0;1;0;DET;0;det;0;NONE;0;3;0;snli
 5595;1;lady;0;0;0;0;NOUN;1;nsubj;1;NONE;0;2;2;snli
 5595;2;wearing;0;0;0;0;VERB;3;acl;19;NONE;0;3;1;snli
