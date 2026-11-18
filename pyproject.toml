@@ -1,0 +1,25 @@
+[project]
+name = "bert_dataset_bias"
+version = "0.1.0"
+description = "Interpreting Attention Allocation Patterns in Pretrained BERT Through Decision Trees"
+authors = [
+    { name="Zakaria JOUILIL", email="zakaria.jouilil@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+"auto_mix_prep",
+"datasets",
+"graphviz",
+"numpy",
+"pandas",
+"scikit_learn",
+"termcolor",
+"torch",
+"tqdm",
+"transformers"
+]
+
+[project.urls]
+Homepage = "https://github.com/fujitsu4/bert_dataset_bias"
