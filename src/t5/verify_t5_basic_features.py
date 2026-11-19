@@ -164,15 +164,27 @@ def main():
     # if it is mapped to an original word. Structural specials have no word_id.
     valid = df.loc[~missing_wid].copy()
     valid["_wid"] = word_ids.loc[valid.index].astype(int)
-    counts = valid.groupby(["sentence_id", "_wid"]).size()
+
+    valid["sentence_id"] = valid["sentence_id"].astype(int)
+    valid["_wid"] = valid["_wid"].astype(int)
+
+    counts = valid.groupby(["sentence_id", "_wid"]).size().to_dict()
+
+
     for idx, row in valid.iterrows():
-        key = (int(nums["sentence_id"].loc[idx]), int(row["_wid"]))
-        expected_count = int(counts.loc[key])
-        if int(nums["num_subtokens"].loc[idx]) != expected_count:
-            fatal(
-                f"num_subtokens mismatch at row {idx}: "
-                f"reported={nums['num_subtokens'].loc[idx]}, expected={expected_count}"
-            )
+      key = (int(nums["sentence_id"].loc[idx]), int(row["_wid"]))
+
+      if key not in counts:
+          fatal(f"Cannot find word group {key} in num_subtokens counts")
+
+      expected_count = int(counts[key])
+      actual_count = int(df.loc[idx, "num_subtokens"])
+
+      if actual_count != expected_count:
+          fatal(
+              f"Incorrect num_subtokens at row {idx}: "
+              f"expected {expected_count}, got {actual_count}"
+          )
     print("[OK] num_subtokens matches the number of pieces per word")
 
     structural_special = (expected_special == 1) & missing_wid
