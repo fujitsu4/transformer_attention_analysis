@@ -28,6 +28,7 @@ import spacy
 import re
 import argparse
 from src.utils.paths import get_project_path
+from pathlib import Path
 
 # ----------------------------------------------------------
 # CLI Parser
@@ -41,7 +42,8 @@ parser.add_argument("--target", type=int, default=10000,
 args = parser.parse_args()
 
 TARGET = args.target
-OUTPUT = get_project_path(*args.output.split("/"))
+OUTPUT = Path(get_project_path(*args.output.split("/")))
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
 MIN_WORDS = 8
 print("[INFO] Loading ArXiv dataset...")
@@ -65,7 +67,8 @@ def clean_sentence(text: str) -> str:
 
     # remove tabs, non-breaking spaces, weird unicode spaces
     text = text.replace("\t", " ").replace("\xa0", " ")
-
+    
+    text = text.replace(r"\$", "$")
     # remove anti slash 
     text = text.replace("\\", "")
 
@@ -173,7 +176,8 @@ for s in selected:
     else:
         rejected_sentences.append("[ROOT] " + s)
 
-rejected_path = get_project_path("logs", "rejected_arxiv.txt")
+rejected_path = Path(get_project_path("logs", "rejected_arxiv.txt"))
+rejected_path.parent.mkdir(parents=True, exist_ok=True)
 
 with open(rejected_path, "w", encoding="utf-8") as f:
     for r in rejected_sentences:

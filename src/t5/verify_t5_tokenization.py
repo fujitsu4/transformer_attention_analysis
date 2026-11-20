@@ -83,6 +83,11 @@ def verify_t5_tokenization(t5_csv, spacy_csv, log_file):
     t5 = pd.read_csv(t5_csv, sep=";", keep_default_na=False)
     spacy = pd.read_csv(spacy_csv, sep=";", keep_default_na=False)
 
+
+    print("[DEBUG] Raw EOS word_id:",
+        repr(t5.loc[t5["t5_token"] == "</s>", "word_id"].iloc[0]))
+    print("[DEBUG] keep_default_na:", False)
+
     # ---- Check required columns ----
     required_t5 = {
         "sentence_id", "t5_index", "t5_token", "word_id", "dataset"
@@ -128,9 +133,13 @@ def verify_t5_tokenization(t5_csv, spacy_csv, log_file):
         except (ValueError, TypeError):
             return None
 
-    t5["word_id"] = [
-        normalize_word_id(x) for x in t5["word_id"]
-    ]
+    t5["word_id"] = pd.Series(
+        [normalize_word_id(x) for x in t5["word_id"]],
+        index=t5.index,
+        dtype="object"
+    )
+    print("[DEBUG] Normalized EOS word_id:",
+        repr(t5.loc[t5["t5_token"] == "</s>", "word_id"].iloc[0]))
 
     # ---------- TEST 1 : Sentence reconstruction ----------
     spacy_by_sent = {
@@ -246,7 +255,12 @@ def verify_t5_tokenization(t5_csv, spacy_csv, log_file):
                 f"in sentence {sid}"
             )
             sys.exit(1)
-
+            """
+        print("\n[DEBUG] Sentence ID:", sid)
+        print("[DEBUG] Last token:", repr(t5_tokens[-1]))
+        print("[DEBUG] Last word_id:", repr(word_ids[-1]))
+        print("[DEBUG] Last word_id type:", type(word_ids[-1]))
+"""
         if word_ids[-1] is not None:
             print(
                 f"[ERROR] Special token </s> has a non-null "
