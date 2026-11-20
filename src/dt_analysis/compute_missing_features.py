@@ -4,15 +4,14 @@ Author: Zakaria JOUILIL
 
 Description:
     Compare features analyzed vs features never selected
-    in decision tree results for pretrained and untrained BERT.
+    in decision tree results for pretrained BERT.
 
 Inputs :
     --attention_csv : the attention csv file containing all features
     --pretrained_csv : aggregated features by depth file (pretrained model)
-    --untrained_csv : aggregated features by depth file (untrained model)
 
 Output :
-    --log_file : log file containing missing features for both pretrained and untrained model
+    --log_file : log file containing missing features for both pretrained model
 
 NOTE:
     The attention file is required as an argument to retrieve the exact names of all features.
@@ -23,7 +22,6 @@ Usage:
     python -m src.dt_analysis.compute_missing_features \
         --attention_csv outputs/attention/attention_top5_pretrained_sample.csv \
         --pretrained_csv outputs/dt_analysis/features_by_depth_pretrained.csv \
-        --untrained_csv outputs/dt_analysis/features_by_depth_untrained.csv \
         --log_file logs/missing_features_comparison.txt
 """
 
@@ -80,10 +78,6 @@ def main():
         f"outputs/dt_analysis/{dataset}/features_by_depth_{dataset}_pretrained.csv"
     )
 
-    untrained_csv = (
-        f"outputs/dt_analysis/{dataset}/features_by_depth_{dataset}_untrained.csv"
-    )
-
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
 
@@ -91,10 +85,8 @@ def main():
 
     all_features = extract_all_features(attention_csv)
     pretrained_used = extract_used_features(pretrained_csv)
-    untrained_used = extract_used_features(untrained_csv)
 
     pretrained_missing = sorted(set(all_features) - pretrained_used)
-    untrained_missing = sorted(set(all_features) - untrained_used)
 
     with open(log_file, "w", encoding="utf8") as f:
         f.write(f"=== Feature Comparison Log ===\n")
@@ -106,10 +98,6 @@ def main():
         f.write("=== Pretrained BERT: Features NEVER selected ===\n")
         f.write(f"Total Missing Features: {len(pretrained_missing)}\n")
         f.write(", ".join(pretrained_missing) + "\n\n")
-
-        f.write("=== Untrained BERT: Features NEVER selected ===\n")
-        f.write(f"Total Missing Features: {len(untrained_missing)}\n")
-        f.write(", ".join(untrained_missing) + "\n")
 
     print(f"[OK] Dataset: {dataset} | Comparison log written to {log_file}")
 
