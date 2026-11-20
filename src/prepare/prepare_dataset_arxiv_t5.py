@@ -69,13 +69,24 @@ def clean_sentence(text: str) -> str:
     text = text.replace("\t", " ").replace("\xa0", " ")
     
     text = text.replace(r"\$", "$")
+
+    # Replace mathematical comparison operators
+    text = text.replace("<=", " less than or equal to ")
+    text = text.replace(">=", " greater than or equal to ")
+    text = text.replace("<", " less than ")
+    text = text.replace(">", " greater than ")
+
+    # Replace exponentiation marker
+    text = text.replace("^", " to the power of ")
+
+    # Remove LaTeX delimiters while preserving their content
+    text = text.replace("{", " ")
+    text = text.replace("}", " ")
+
     # remove anti slash 
     text = text.replace("\\", "")
 
-    text = text.replace("{", " ")
-    text = text.replace("}", " ")
-    text = text.replace("^", " ")
-
+    text = text.replace("~", " approximately ")
     # collapse multiple spaces into a single one
     text = re.sub(r"\s+", " ", text)
 
