@@ -72,6 +72,9 @@ def clean_sentence(text: str) -> str:
     # remove anti slash 
     text = text.replace("\\", "")
 
+    text = text.replace("{", " ")
+    text = text.replace("}", " ")
+
     # collapse multiple spaces into a single one
     text = re.sub(r"\s+", " ", text)
 
