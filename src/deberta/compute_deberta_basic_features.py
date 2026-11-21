@@ -1,0 +1,192 @@
+
+"""
+compute_deberta_basic_features.py
+Author: Zakaria JOUILIL
+
+Description:
+    Compute basic DeBERTa token features:
+        - is_special_token
+        - token_length
+        - is_subword
+        - position_in_sentence
+        - relative_position
+        - num_subtokens
+
+Inputs:
+    --deberta_csv: outputs/deberta/deberta_tokens.csv
+
+Outputs:
+    outputs/deberta/deberta_basic_features.csv
+
+Usage:
+    python -m src.deberta.compute_deberta_basic_features \
+        --deberta_csv outputs/deberta/deberta_tokens.csv \
+        --output outputs/deberta/deberta_basic_features.csv
+"""
+
+import argparse
+import pandas as pd
+from src.utils.paths import get_project_path
+
+
+# ----------------------------------------------------------
+# CLI
+# ----------------------------------------------------------
+parser = argparse.ArgumentParser(
+    description="Compute basic DeBERTa token features"
+)
+
+parser.add_argument(
+    "--deberta_csv",
+    type=str,
+    required=True,
+    help="Input deberta_tokens.csv file"
+)
+
+parser.add_argument(
+    "--output",
+    type=str,
+    default="outputs/deberta/deberta_basic_features.csv",
+    help="Output CSV file"
+)
+
+args = parser.parse_args()
+
+deberta_csv = get_project_path(*args.deberta_csv.split("/"))
+output_csv = get_project_path(*args.output.split("/"))
+
+print("[INFO] Loading DeBERTa tokens from:", deberta_csv)
+
+df = pd.read_csv(
+    deberta_csv,
+    sep=";",
+    keep_default_na=False,
+    na_values=[],
+    dtype={
+        "word_id": str,
+        "deberta_token": str
+    }
+)
+
+df["sentence_id"] = df["sentence_id"].astype(int)
+df["deberta_index"] = df["deberta_index"].astype(int)
+df["deberta_token"] = df["deberta_token"].fillna("").astype(str)
+
+
+# ----------------------------------------------------------
+# 1) is_special_token
+# ----------------------------------------------------------
+df["is_special_token"] = (
+    df["deberta_token"]
+    .isin(["[CLS]", "[SEP]", "[PAD]", "[UNK]"])
+    .astype(int)
+)
+
+
+# ----------------------------------------------------------
+# 2) token_length
+# ----------------------------------------------------------
+# Exclude the SentencePiece word-boundary marker ▁
+
+df["token_length"] = (
+    df["deberta_token"]
+    .str.replace(r"^▁", "", regex=True)
+    .str.len()
+)
+
+
+# ----------------------------------------------------------
+# 3) is_subword
+# ----------------------------------------------------------
+# SentencePiece:
+# ▁ indicates the beginning of a word.
+# Tokens without ▁ are subsequent subword pieces.
+
+df["is_subword"] = (
+    ~df["deberta_token"].str.startswith("▁")
+    & (df["is_special_token"] == 0)
+).astype(int)
+
+
+# ----------------------------------------------------------
+# 4) position_in_sentence
+# ----------------------------------------------------------
+df["position_in_sentence"] = df["deberta_index"]
+
+
+# ----------------------------------------------------------
+# 5) relative_position = deberta_index / max_index
+# ----------------------------------------------------------
+print("[INFO] Computing relative positions...")
+
+df["relative_position"] = df.groupby("sentence_id")[
+    "deberta_index"
+].transform(
+    lambda col: col / col.max()
+)
+
+
+# ----------------------------------------------------------
+# 6) num_subtokens
+# ----------------------------------------------------------
+
+def normalize_word_id(x):
+    s = str(x).strip()
+
+    if s == "":
+        return pd.NA
+
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return pd.NA
+
+
+df["word_id"] = df["word_id"].apply(normalize_word_id)
+
+print("[INFO] Computing num_subtokens per word...")
+
+valid = df[df["is_special_token"] == 0]
+
+counts = (
+    valid
+    .groupby(["sentence_id", "word_id"])
+    .size()
+    .rename("num_subtokens")
+    .reset_index()
+)
+
+df = df.merge(
+    counts,
+    how="left",
+    on=["sentence_id", "word_id"]
+)
+
+df["num_subtokens"] = (
+    df["num_subtokens"]
+    .fillna(-1)
+    .astype(int)
+)
+
+
+# ----------------------------------------------------------
+# 7) Reorder dataset column
+# ----------------------------------------------------------
+if "dataset" in df.columns:
+    df = df.reindex(
+        columns=[
+            c for c in df.columns if c != "dataset"
+        ] + ["dataset"]
+    )
+
+
+# ----------------------------------------------------------
+# 8) Save output
+# ----------------------------------------------------------
+df.to_csv(
+    output_csv,
+    sep=";",
+    index=False
+)
+
+print("[INFO] Saved DeBERTa features to:", output_csv)
