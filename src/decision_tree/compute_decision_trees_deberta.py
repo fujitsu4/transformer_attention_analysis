@@ -13,14 +13,14 @@ Description:
 
 Output structure:
     PRETRAINED:
-        outputs/deberta/decision_tree/pretrained/<dataset>/
+        outputs/decision_tree/pretrained/<dataset>/
             deberta_layer_01_rules_full.txt
             deberta_layer_01_rules_pos.txt
             deberta_layer_01_rules_simp_pos.txt
             ... through layer 06
 
     UNTRAINED:
-        outputs/deberta/decision_tree/untrained/<dataset>/seed_XXXXXX/
+        outputs/decision_tree/untrained/<dataset>/seed_XXXXXX/
             deberta_layer_01_rules_full.txt
             deberta_layer_01_rules_pos.txt
             deberta_layer_01_rules_simp_pos.txt
@@ -80,16 +80,16 @@ def main():
     # Match the exact output filename produced by compute_attention_top5_deberta.py.
     if args.model == "pretrained":
         input_csv = (
-            f"outputs/deberta/deberta_attention_top5_{args.dataset}_pretrained.csv"
+            f"outputs/deberta_attention_top5_{args.dataset}_pretrained.csv"
         )
-        out_dir = f"outputs/deberta/decision_tree/pretrained/{args.dataset}"
+        out_dir = f"outputs/decision_tree/pretrained/{args.dataset}"
     else:
         input_csv = (
-            f"outputs/deberta/deberta_attention_top5_{args.dataset}_"
+            f"outputs/deberta_attention_top5_{args.dataset}_"
             f"untrained_seed_{args.seed:03d}.csv"
         )
         out_dir = (
-            f"outputs/deberta/decision_tree/untrained/{args.dataset}/"
+            f"outputs/decision_tree/untrained/{args.dataset}/"
             f"seed_{args.seed:06d}"
         )
 
