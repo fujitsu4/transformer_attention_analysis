@@ -1,5 +1,5 @@
 [project]
-name = "bert_dataset_bias"
+name = "Transformer Attention Analysis"
 version = "0.1.0"
 description = "Interpreting Attention Allocation Patterns in Pretrained BERT Through Decision Trees"
 authors = [
