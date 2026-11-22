@@ -114,11 +114,11 @@ def main():
                 raise ValueError(f"Missing required column in input CSV: {col}")
 
         # ----------------------------------------------
-        # TRAIN + EXTRACT RULES FOR 6 LAYERS
+        # TRAIN + EXTRACT RULES FOR 12 LAYERS
         # ----------------------------------------------
-        print("[INFO] Starting Decision Tree extraction for 6 layers ...")
+        print("[INFO] Starting Decision Tree extraction for 12 layers ...")
 
-        NUM_LAYERS = 5
+        NUM_LAYERS = 12
         for layer in range(1, NUM_LAYERS + 1):
             print(f"\n[INFO] Processing layer {layer}/6 ...")
 

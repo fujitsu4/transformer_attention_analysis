@@ -110,7 +110,7 @@ def main():
         # ----------------------------------------------
         print("[INFO] Starting Decision Tree extraction for 12 layers ...")
 
-        NUM_LAYERS = 6
+        NUM_LAYERS = 12
         for layer in range(1, NUM_LAYERS + 1):
             print(f"\n[INFO] Processing layer {layer}/12 ...")
 
