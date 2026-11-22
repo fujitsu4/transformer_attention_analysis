@@ -61,7 +61,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-MODEL_NAME = "google-t5/t5-small"
+MODEL_NAME = "google-t5/t5-base"
 
 
 import sys

@@ -7,7 +7,7 @@ Description:
     Tokenize sentences using T5, preserving the exact correspondence
     between T5 tokens and original words (word_id).
 
-    Uses the encoder tokenizer from google-t5/t5-small.
+    Uses the encoder tokenizer from google-t5/t5-base.
     Special tokens are preserved with an empty word_id.
 
 Inputs:
@@ -32,7 +32,7 @@ from transformers import AutoTokenizer
 from tqdm import tqdm
 
 
-MODEL_NAME = "google-t5/t5-small"
+MODEL_NAME = "google-t5/t5-base"
 
 
 def load_word_sequences(spacy_csv):

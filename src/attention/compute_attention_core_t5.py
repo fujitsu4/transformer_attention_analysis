@@ -25,7 +25,7 @@ import torch
 from transformers import T5Config, T5Model
 
 
-MODEL_NAME = "google-t5/t5-small"
+MODEL_NAME = "google-t5/t5-base"
 
 
 # ---------------------------------------------------------
@@ -48,7 +48,7 @@ def load_model(pretrained: bool, seed: int = None):
 
     if pretrained:
 
-        print("[INFO] Loading PRETRAINED T5-small model ...")
+        print("[INFO] Loading PRETRAINED T5-base model ...")
 
         config = T5Config.from_pretrained(MODEL_NAME)
         config.output_attentions = True
@@ -67,7 +67,7 @@ def load_model(pretrained: bool, seed: int = None):
             )
 
         print(
-            f"[INFO] Loading RANDOMLY INITIALIZED T5-small "
+            f"[INFO] Loading RANDOMLY INITIALIZED T5-base "
             f"model with seed {seed} ..."
         )
 

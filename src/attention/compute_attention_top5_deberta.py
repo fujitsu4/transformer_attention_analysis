@@ -2,7 +2,6 @@
 compute_attention_top5_deberta.py
 Author: Zakaria JOUILIL
 
-DeBERTa-v3-small adaptation of compute_attention_top5.py.
 The attention calculations and top-k selection are preserved.
 Stored tokens are converted directly to IDs; no retokenization is performed.
 """
@@ -16,8 +15,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoConfig, AutoModel, AutoTokenizer
 
-MODEL_NAME = "microsoft/deberta-v3-small"
-N_LAYERS = 6
+MODEL_NAME = "microsoft/deberta-v3-base"
+N_LAYERS = 12
 
 
 # ---------------------------------------------------------
@@ -151,13 +150,13 @@ def main():
     # Model selection
     if args.model == "pretrained":
         pretrained_flag = True
-        print("[INFO] Loading PRETRAINED DeBERTa-v3-small model ...")
+        print("[INFO] Loading PRETRAINED DeBERTa-v3-base model ...")
     else:
         if args.seed is None:
             raise ValueError("Untrained model requires --seed")
         pretrained_flag = False
         print(
-            f"[INFO] Loading RANDOMLY INITIALIZED DeBERTa-v3-small "
+            f"[INFO] Loading RANDOMLY INITIALIZED DeBERTa-v3-base "
             f"model with seed {args.seed} ..."
         )
         fix_seed(args.seed)
@@ -186,7 +185,6 @@ def main():
 
     out_path = os.path.join(out_dir, out_name)
 
-    # DeBERTa-v3-small has 6 layers.
     n_layers = N_LAYERS
     for L in range(1, n_layers + 1):
         df[f"top5_l{L}"] = 0
