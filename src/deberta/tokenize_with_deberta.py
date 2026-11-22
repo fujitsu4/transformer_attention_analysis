@@ -4,10 +4,10 @@ tokenize_with_deberta.py
 Author: Zakaria JOUILIL
 
 Description:
-    Tokenize sentences using DeBERTa-v3-small, preserving the exact
+    Tokenize sentences using DeBERTa-v3-base, preserving the exact
     correspondence between DeBERTa tokens and original words (word_id).
 
-    Uses the Fast tokenizer from microsoft/deberta-v3-small.
+    Uses the Fast tokenizer from microsoft/deberta-v3-base.
     Special tokens are preserved with an empty word_id.
 
 Inputs:
@@ -32,7 +32,7 @@ from transformers import AutoTokenizer
 from tqdm import tqdm
 
 
-MODEL_NAME = "microsoft/deberta-v3-small"
+MODEL_NAME = "microsoft/deberta-v3-base"
 
 
 def load_word_sequences(spacy_csv):
