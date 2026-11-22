@@ -120,7 +120,7 @@ def main():
 
         NUM_LAYERS = 12
         for layer in range(1, NUM_LAYERS + 1):
-            print(f"\n[INFO] Processing layer {layer}/6 ...")
+            print(f"\n[INFO] Processing layer {layer}/12 ...")
 
             # -------------------------------------------------------------
             # TRAIN MODEL AND EXTRACT 3 RULESETS
