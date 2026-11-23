@@ -1,4 +1,3 @@
-
 """
 compute_attention_core_bigbird.py
 Author: Zakaria JOUILIL
@@ -64,6 +63,93 @@ def load_model(pretrained: bool, seed: int = None):
     return model
 
 
+
+# ---------------------------------------------------------
+# Switch between full and block-sparse attention (same weights)
+# ---------------------------------------------------------
+def set_attention_mode(model, mode: str):
+    """
+    Switch the attention implementation WITHOUT touching the weights
+    (q/k/v Linear layers are shared by reference by HF).
+    Cheap if the model is already in the requested mode.
+    """
+    if mode not in ("original_full", "block_sparse"):
+        raise ValueError(f"Unknown attention mode: {mode}")
+
+    if model.attention_type != mode:
+        model.set_attention_type(mode)
+
+
+# ---------------------------------------------------------
+# FAST PATH: batched, exact for sentences <= block_size tokens
+# ---------------------------------------------------------
+def layer_sums_full_batch(model, tokenizer, token_lists):
+    """
+    Batched attention sums for SHORT sequences (len <= block_size).
+
+    Why this is equivalent to the padded-1024 block-sparse run:
+    all real tokens sit in block 0, which is a GLOBAL block in BigBird
+    (it attends to every key). Padded keys are masked. So the attention
+    rows of real tokens are exactly full attention over the real tokens.
+
+    The model must be in 'original_full' mode (see set_attention_mode).
+
+    Returns: np.ndarray (num_layers, batch, max_len) with
+             sum over heads and over REAL query positions, per key.
+             Positions >= len(tokens_i) are garbage/zero: slice them off.
+    """
+    if model.attention_type != "original_full":
+        raise RuntimeError("Call set_attention_mode(model, 'original_full') first.")
+
+    device = next(model.parameters()).device
+    lens = [len(t) for t in token_lists]
+
+    if min(lens) == 0:
+        raise ValueError("Empty token sequence.")
+
+    batch = len(token_lists)
+    max_len = max(lens)
+
+    input_ids = torch.full(
+        (batch, max_len), tokenizer.pad_token_id,
+        dtype=torch.long, device=device
+    )
+    attention_mask = torch.zeros(
+        (batch, max_len), dtype=torch.long, device=device
+    )
+
+    for i, toks in enumerate(token_lists):
+        ids = tokenizer.convert_tokens_to_ids(toks)
+        input_ids[i, :len(ids)] = torch.as_tensor(ids, dtype=torch.long, device=device)
+        attention_mask[i, :len(ids)] = 1
+
+    with torch.inference_mode():
+
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_attentions=True,
+            return_dict=True
+        )
+
+        if len(outputs.attentions) != model.config.num_hidden_layers:
+            raise RuntimeError("Unexpected number of attention layers.")
+
+        m = attention_mask.to(outputs.attentions[0].dtype)
+        q_mask = m[:, None, :, None]   # real query rows
+        k_mask = m[:, None, None, :]   # real key columns
+
+        sums = []
+        for layer_att in outputs.attentions:          # (B, H, L, L)
+            masked = layer_att * q_mask * k_mask
+            sums.append(masked.sum(dim=(1, 2)))       # heads, then queries -> (B, L)
+
+        sums = torch.stack(sums, dim=0)               # (layers, B, L)
+
+    # ONE device->host transfer for the whole batch.
+    return sums.cpu().numpy()
+
+
 # ---------------------------------------------------------
 # Extract attention matrices and compute summaries
 # ---------------------------------------------------------
@@ -95,6 +181,9 @@ def compute_attention(
 
     if real_length == 0:
         raise ValueError("Empty token sequence.")
+
+    # The legacy path must always run the true block-sparse attention.
+    set_attention_mode(model, "block_sparse")
 
     block_size = model.config.block_size
 
