@@ -61,7 +61,7 @@ def clean_sentence(text: str) -> str:
 
     # remove tabs, non-breaking spaces, weird unicode spaces
     text = text.replace("\t", " ").replace("\xa0", " ")
-    text = text.replace("\\", " ") # only for t5 (comment for others)
+    #text = text.replace("\\", " ") # only for t5 (comment for others)
 
     # collapse multiple spaces into a single one
     text = re.sub(r"\s+", " ", text)
