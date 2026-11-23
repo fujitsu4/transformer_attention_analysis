@@ -2,28 +2,31 @@
 compute_attention_top5_bigbird.py
 Author: Zakaria JOUILIL
 
-BigBird attention calculations and top-k selection (OPTIMIZED VERSION).
+BigBird attention calculations and top-k selection.
 Stored tokens are converted directly to IDs; no retokenization.
 
-Two execution paths, same results:
+REFERENCE PROTOCOL (default):
+    true BigBird block_sparse attention, input padded to >= 1024 tokens,
+    for ALL sentences. Output: attention_top5_<dataset>_bigbird_*.csv
 
-  FAST path  (real length <= block_size = 64 tokens)
-      Real tokens all live in block 0, which is a GLOBAL block in BigBird:
-      it attends to every key, and padded keys are masked. The result is
-      therefore identical to full attention over the real tokens, so we run
-      'original_full' on UNPADDED inputs, in BATCHES.
+Optimizations that do NOT change the mechanism:
+    - attention sums computed in one block per forward pass
+    - ONE GPU->CPU transfer per sentence (or per batch)
+    - preallocated output array, no pandas .loc inside the loop
+    - no full attention matrices / head sums kept in memory
+    - optional --sparse_batch_size: several sentences per block_sparse forward
 
-  LEGACY path (real length > 64 tokens)
-      Original behaviour: pad to 1024 and run true block_sparse attention,
-      one sentence at a time.
+OPTIONAL VARIANT (--full_for_short):
+    sentences with <= block_size tokens use 'original_full' attention on
+    unpadded inputs (equivalent in theory, much faster). It is a SEPARATE
+    experiment: the output file gets the suffix '_fullshort' so it can never
+    overwrite or be mixed with the reference.
 
-Use --max_full_len 0 to disable the fast path (= exactly the old behaviour).
-
-Usage (unchanged + 2 optional args):
+Usage:
     python -m src.attention.compute_attention_top5_bigbird \
         --model pretrained --dataset snli \
         --input_csv outputs/bigbird/bigbird_snli_final_features.csv \
-        [--batch_size 32] [--max_full_len 64]
+        [--sparse_batch_size 4] [--full_for_short]
 """
 
 import argparse
@@ -38,8 +41,9 @@ from transformers import AutoTokenizer
 
 from src.attention.compute_attention_core_bigbird import (
     load_model,
-    compute_attention,
     layer_sums_full_batch,
+    layer_sums_sparse_batch,
+    padded_length_for,
     set_attention_mode,
     fix_seed
 )
@@ -97,6 +101,11 @@ def check_sums(sums_2d, seq_len, sid):
         raise RuntimeError(f"Sentence {sid}: non-finite attention sums")
 
 
+def write_flags(top, pos, sums_2d, k):
+    for li in range(N_LAYERS):
+        top[pos, li] = topk_boolean_flags(sums_2d[li], k=k)
+
+
 # ---------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------
@@ -112,13 +121,19 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, choices=["snli", "agnews", "arxiv"])
 
     parser.add_argument(
-        "--batch_size", type=int, default=32,
-        help="Batch size for the fast path (short sentences)"
+        "--sparse_batch_size", type=int, default=1,
+        help="Sentences per block_sparse forward pass (reference path). "
+             "1 = original behaviour. Each sentence costs ~0.6 GB of attention "
+             "matrices at 1024 tokens, so keep it small."
     )
     parser.add_argument(
-        "--max_full_len", type=int, default=None,
-        help="Max real length for the fast path. Default = block_size (64). "
-             "0 disables the fast path (legacy behaviour for everything)."
+        "--full_for_short", action="store_true",
+        help="VARIANT: use original_full on sentences <= block_size tokens. "
+             "Writes a separate '_fullshort' file."
+    )
+    parser.add_argument(
+        "--full_batch_size", type=int, default=32,
+        help="Batch size of the original_full variant"
     )
 
     args = parser.parse_args()
@@ -168,14 +183,6 @@ def main():
     model.eval()
 
     block_size = model.config.block_size
-    max_full_len = block_size if args.max_full_len is None else args.max_full_len
-
-    if max_full_len > block_size:
-        raise ValueError(
-            f"--max_full_len ({max_full_len}) must be <= block_size ({block_size}): "
-            f"beyond one block the block-sparse pattern is no longer equal "
-            f"to full attention."
-        )
 
     # -----------------------------------------------------
     # Load input CSV
@@ -189,109 +196,111 @@ def main():
             raise ValueError(f"Missing column in input CSV: {col}")
 
     # -----------------------------------------------------
-    # Output path
+    # Output path (variant never shares the reference file name)
     # -----------------------------------------------------
     out_dir = "outputs/attention"
     os.makedirs(out_dir, exist_ok=True)
 
+    variant = "_fullshort" if args.full_for_short else ""
+
     if pretrained_flag:
-        out_name = f"attention_top5_{args.dataset}_bigbird_pretrained.csv"
+        out_name = f"attention_top5_{args.dataset}_bigbird{variant}_pretrained.csv"
     else:
         out_name = (
-            f"attention_top5_{args.dataset}_bigbird_"
+            f"attention_top5_{args.dataset}_bigbird{variant}_"
             f"untrained_seed_{args.seed:03d}.csv"
         )
 
     out_path = os.path.join(out_dir, out_name)
 
     # -----------------------------------------------------
-    # Split sentences: fast path vs legacy path
+    # Split sentences
     # -----------------------------------------------------
     sentences = build_sentences(df)
-
-    short = sorted(
-        (s for s in sentences if len(s[2]) <= max_full_len),
-        key=lambda s: len(s[2])          # similar lengths -> little padding
-    )
-    long_ = [s for s in sentences if len(s[2]) > max_full_len]
-
     lens = np.array([len(s[2]) for s in sentences])
 
     print(
-        f"[INFO] {len(sentences)} sentences | "
-        f"length min/median/p95/max = "
+        f"[INFO] {len(sentences)} sentences | length min/median/p95/max = "
         f"{lens.min()}/{int(np.median(lens))}/{int(np.percentile(lens, 95))}/{lens.max()}"
     )
-    print(f"[INFO] Fast path   (<= {max_full_len} tokens): {len(short)} sentences")
-    print(f"[INFO] Legacy path (>  {max_full_len} tokens): {len(long_)} sentences")
+    print(f"[INFO] Sentences with <= {block_size} tokens: {(lens <= block_size).sum()}")
 
-    # Preallocated result: one write per sentence/layer, no pandas .loc in the loop.
+    if args.full_for_short:
+        short = sorted(
+            (s for s in sentences if len(s[2]) <= block_size),
+            key=lambda s: len(s[2])
+        )
+        sparse = [s for s in sentences if len(s[2]) > block_size]
+        print("[INFO] VARIANT ACTIVE: original_full for short sentences "
+              f"({len(short)}), block_sparse for the others ({len(sparse)}).")
+    else:
+        short = []
+        sparse = sentences
+        print(f"[INFO] REFERENCE PROTOCOL: block_sparse, padded >= 1024, "
+              f"for all {len(sparse)} sentences.")
+
+    # Preallocated result
     top = np.zeros((len(df), N_LAYERS), dtype=np.int64)
 
-    t0 = time.time()
-
     # -----------------------------------------------------
-    # FAST path: full attention, unpadded, batched
+    # VARIANT path: full attention, unpadded, batched
     # -----------------------------------------------------
     if short:
 
+        t0 = time.time()
         set_attention_mode(model, "original_full")
 
-        for i in tqdm(range(0, len(short), args.batch_size), desc="Fast path (batches)"):
+        for i in tqdm(range(0, len(short), args.full_batch_size), desc="original_full (short)"):
 
-            batch = short[i:i + args.batch_size]
-
-            sums = layer_sums_full_batch(
-                model, tokenizer, [b[2] for b in batch]
-            )  # (N_LAYERS, B, max_len)
-
-            if sums.shape[0] != N_LAYERS:
-                raise RuntimeError(f"Expected {N_LAYERS} layers, got {sums.shape[0]}")
+            batch = short[i:i + args.full_batch_size]
+            sums = layer_sums_full_batch(model, tokenizer, [b[2] for b in batch])
 
             for j, (sid, pos, toks) in enumerate(batch):
-
                 n = len(toks)
                 sums_j = sums[:, j, :n]
                 check_sums(sums_j, n, sid)
+                write_flags(top, pos, sums_j, args.top_k)
 
-                for li in range(N_LAYERS):
-                    top[pos, li] = topk_boolean_flags(sums_j[li], k=args.top_k)
-
-    print(f"[INFO] Fast path done in {time.time() - t0:.1f}s")
-    t1 = time.time()
+        print(f"[INFO] original_full part done in {time.time() - t0:.1f}s")
 
     # -----------------------------------------------------
-    # LEGACY path: padded 1024, true block-sparse, 1 by 1
+    # REFERENCE path: block_sparse, padded >= 1024
     # -----------------------------------------------------
-    if long_:
+    if sparse:
 
+        t1 = time.time()
         set_attention_mode(model, "block_sparse")
 
-        for sid, pos, toks in tqdm(long_, desc="Legacy path (block_sparse)"):
+        # Group by padded length (all 1024 unless a sentence is > 1024 tokens),
+        # similar lengths together, so batches never change a sentence's padding.
+        sparse = sorted(
+            sparse, key=lambda s: (padded_length_for(model, len(s[2])), len(s[2]))
+        )
 
-            att = compute_attention(
-                model,
-                tokenizer,
-                toks,
-                return_attentions=False,   # not used here -> don't keep them
-                return_head_sums=False     # not used here -> skip 144 slices
-            )
+        batches = []
+        cur = []
+        for s in sparse:
+            if cur and (
+                len(cur) >= args.sparse_batch_size
+                or padded_length_for(model, len(s[2])) != padded_length_for(model, len(cur[0][2]))
+            ):
+                batches.append(cur)
+                cur = []
+            cur.append(s)
+        if cur:
+            batches.append(cur)
 
-            layer_sums = att["layer_sums"]
+        for batch in tqdm(batches, desc="block_sparse (reference)"):
 
-            if len(layer_sums) != N_LAYERS:
-                raise RuntimeError(
-                    f"Expected {N_LAYERS} layers but got {len(layer_sums)}"
-                )
+            sums = layer_sums_sparse_batch(model, tokenizer, [b[2] for b in batch])
 
-            # ONE transfer instead of 12 syncs
-            sums_np = torch.stack(layer_sums, dim=0).detach().cpu().numpy()
-            check_sums(sums_np, len(toks), sid)
+            for j, (sid, pos, toks) in enumerate(batch):
+                n = len(toks)
+                sums_j = sums[:, j, :n]
+                check_sums(sums_j, n, sid)
+                write_flags(top, pos, sums_j, args.top_k)
 
-            for li in range(N_LAYERS):
-                top[pos, li] = topk_boolean_flags(sums_np[li], k=args.top_k)
-
-        print(f"[INFO] Legacy path done in {time.time() - t1:.1f}s")
+        print(f"[INFO] block_sparse part done in {time.time() - t1:.1f}s")
 
     # -----------------------------------------------------
     # Write columns once, in the same order as before
