@@ -1,0 +1,275 @@
+
+"""
+merge_spacy_and_longformer.py
+Author: Zakaria JOUILIL
+
+Description:
+    Merge spaCy features (word-level) with Longformer basic features
+    (token-level) and statistical features (token or word level)
+    into a unified dataframe that will later be enriched with
+    neighbor POS features.
+
+Final column order:
+    sentence_id
+    longformer_index
+    longformer_token
+    word_id
+    is_numeric
+    is_punctuation
+    is_stopword
+    is_pronoun
+    pos_id
+    dep_id
+    ent_id
+    depth_in_tree
+    num_dependents
+    is_special_token
+    token_length
+    is_subword
+    position_in_sentence
+    relative_position
+    num_subtokens
+    token_relative_frequency
+    word_sentence_frequency
+    token_rank
+    word_burstiness
+    prev_pos_id
+    next_pos_id
+    dataset
+
+Inputs:
+    --spacy_csv : outputs/spacy/spacy_snli_features.csv
+    --longformer_csv : outputs/longformer/longformer_statistical_features.csv
+
+Output:
+    outputs/longformer/longformer_snli_merged.csv
+"""
+
+import argparse
+import os
+import pandas as pd
+
+
+# -------------------------------------------------------------------
+# Arguments
+# -------------------------------------------------------------------
+
+parser = argparse.ArgumentParser(
+    description="Merge spaCy and Longformer features"
+)
+
+parser.add_argument(
+    "--spacy_csv",
+    required=True,
+    help="Path to spacy_features.csv"
+)
+
+parser.add_argument(
+    "--longformer_csv",
+    required=True,
+    help="Path to longformer_statistical_features.csv"
+)
+
+parser.add_argument(
+    "--output",
+    required=True,
+    help="Output merged CSV path"
+)
+
+args = parser.parse_args()
+
+
+# -------------------------------------------------------------------
+# Load CSV files
+# -------------------------------------------------------------------
+
+print("[INFO] Loading spaCy features:", args.spacy_csv)
+
+spacy_df = pd.read_csv(
+    args.spacy_csv,
+    sep=";",
+    keep_default_na=False,
+    na_values=[""]
+)
+
+print(
+    "[INFO] Loading Longformer basic AND statistical features:",
+    args.longformer_csv
+)
+
+longformer_df = pd.read_csv(
+    args.longformer_csv,
+    sep=";",
+    keep_default_na=False,
+    na_values=[""]
+)
+
+
+# -------------------------------------------------------------------
+# 1. Normalize column names for merging
+# -------------------------------------------------------------------
+
+spacy_df = spacy_df.rename(
+    columns={"word_index": "word_id"}
+)
+
+
+# -------------------------------------------------------------------
+# 2. Drop unused STRING columns (only keep IDs for ML)
+# -------------------------------------------------------------------
+
+cols_to_drop = [
+    "pos",
+    "dep_label",
+    "ent_label"
+]
+
+for col in cols_to_drop:
+    if col in spacy_df.columns:
+        spacy_df = spacy_df.drop(columns=[col])
+
+
+# -------------------------------------------------------------------
+# 3. Merge on (sentence_id, word_id, dataset)
+# -------------------------------------------------------------------
+
+print("[INFO] Merging on (sentence_id, word_id, dataset)...")
+
+merged = longformer_df.merge(
+    spacy_df,
+    on=["sentence_id", "word_id", "dataset"],
+    how="left",
+    validate="many_to_one"
+)
+
+
+# -------------------------------------------------------------------
+# 4. Initialize prev/next POS IDs
+#    (will be computed in the next script)
+# -------------------------------------------------------------------
+
+merged["prev_pos_id"] = -1
+merged["next_pos_id"] = -1
+
+
+# -------------------------------------------------------------------
+# 5. Reorder columns
+# -------------------------------------------------------------------
+
+final_cols = [
+    "sentence_id",
+    "longformer_index",
+    "longformer_token",
+    "word_id",
+
+    "is_numeric",
+    "is_punctuation",
+    "is_stopword",
+    "is_pronoun",
+    "pos_id",
+    "dep_id",
+    "ent_id",
+    "depth_in_tree",
+    "num_dependents",
+
+    "is_special_token",
+    "token_length",
+    "is_subword",
+    "position_in_sentence",
+    "relative_position",
+    "num_subtokens",
+    "token_relative_frequency",
+    "word_sentence_frequency",
+    "token_rank",
+    "word_burstiness",
+
+    "prev_pos_id",
+    "next_pos_id",
+
+    "dataset"
+]
+
+print("[INFO] Reordering columns...")
+
+missing_cols = [
+    col for col in final_cols
+    if col not in merged.columns
+]
+
+if missing_cols:
+    raise ValueError(
+        f"Missing expected columns after merge: {missing_cols}"
+    )
+
+merged = merged[final_cols]
+
+
+# -------------------------------------------------------------------
+# 6. Assign correct default values for special tokens
+# -------------------------------------------------------------------
+
+print("[INFO] Assigning default values for special tokens...")
+
+merged["word_id"] = (
+    pd.to_numeric(merged["word_id"], errors="coerce")
+    .fillna(-1)
+    .astype(int)
+)
+
+special_mask = (
+    pd.to_numeric(
+        merged["is_special_token"],
+        errors="coerce"
+    ).fillna(0).astype(int) == 1
+)
+
+
+# 1) Boolean spaCy features -> 0
+
+bool_cols = [
+    "is_numeric",
+    "is_punctuation",
+    "is_stopword",
+    "is_pronoun"
+]
+
+for col in bool_cols:
+    if col in merged.columns:
+        merged.loc[special_mask, col] = 0
+
+
+# 2) Syntactic or contextual features -> -1
+#    The value 0 already has a real meaning.
+
+id_cols_minus1 = [
+    "pos_id",
+    "dep_id",
+    "ent_id",
+    "depth_in_tree",
+    "num_dependents"
+]
+
+for col in id_cols_minus1:
+    if col in merged.columns:
+        merged.loc[special_mask, col] = -1
+
+
+# -------------------------------------------------------------------
+# 7. Save output
+# -------------------------------------------------------------------
+
+print("[INFO] Saving merged output to:", args.output)
+
+os.makedirs(
+    os.path.dirname(args.output) or ".",
+    exist_ok=True
+)
+
+merged.to_csv(
+    args.output,
+    sep=";",
+    index=False
+)
+
+print("[INFO] Merge completed successfully.")
+print("[INFO] Output shape:", merged.shape)
