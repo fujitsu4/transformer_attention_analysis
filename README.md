@@ -1,4 +1,4 @@
-# bert_dataset_bias
+# transformer_attention_analysis
 
 ## A.Project overview
 This is a research-oriented framework designed to analyze and characterize bias-related decision patterns in BERT models using interpretable decision trees.
@@ -15,11 +15,9 @@ Particular emphasis is placed on **interpretability**, **reproducibility**, and 
 
 All major processing steps are accompanied by dedicated verification scripts to ensure the correctness of intermediate and final results.
 
-The framework supports both **pretrained** BERT and **untrained** BERT models, enabling a systematic comparison between emergent structures induced by training and architectural biases.
-
 ## B.Project structure
 ```
-BERT_DATASET_BIAS/
+TRANSFORMER_ATTENTION_ANALYSIS/
 ├── data/
 │   └── cleaned/                 # Filtered and merged datasets (AGNews, ArXiv, SNLI)
 │
@@ -57,8 +55,8 @@ This project was developed and tested with Python ≥ 3.10.
 
 **1. Clone the repository**
 ```
-git clone https://github.com/fujitsu4/bert_dataset_bias.git
-cd bert_dataset_bias
+git clone https://github.com/fujitsu4/transformer_attention_analysis.git
+cd transformer_attention_analysis
 ```
 
 **2. Create a virtual environment (recommended)**
@@ -166,16 +164,7 @@ bash run_attention_seeds.sh outputs/attention/seeds_list.txt
 
 Decision trees are trained independently for each layer (12 layers) using the extracted attention scores. This step is performed separately for pretrained and untrained models.
 ```
-python -m src.decision_tree.compute_decision_trees --model pretrained --dataset snli
-```
-
-*5.2 Untrained BERT (Multiple Seeds)*
-
-Decision tree are computed per seed (typically via a shell script for automation):
-
-```
-bash run_decision_tree_seeds.sh /content/bert_dataset_bias/outputs/attention/seeds_list.txt --max-runs 3
-```
+python -m src.decision_tree.compute_decision_trees --model pretrained --dataset snli ```
 
 Verification scripts ensure tree reproducibility and consistency across seeds and layers.
 

@@ -22,4 +22,4 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fujitsu4/bert_dataset_bias"
+Homepage = "https://github.com/fujitsu4/transformer_attention_analysis"
